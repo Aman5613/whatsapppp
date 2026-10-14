@@ -84,7 +84,30 @@ def create_app() -> FastAPI:
     app.include_router(settings_router)
     app.include_router(usage_router)
 
+    # --- Serve Built Frontend (Single Container / Render Monorepo Deploy) ---
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    dist_dir = Path(__file__).resolve().parent.parent / "dist"
+    if dist_dir.exists():
+        assets_dir = dist_dir / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            # Do not intercept api or webhook paths
+            if full_path.startswith("api/") or full_path.startswith("webhook/"):
+                return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+            target = dist_dir / full_path
+            if target.is_file():
+                return FileResponse(target)
+            return FileResponse(dist_dir / "index.html")
+
     return app
+
 
 
 app = create_app()
