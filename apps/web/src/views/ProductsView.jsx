@@ -114,26 +114,26 @@ export default function ProductsView({ businessId }) {
   });
 
   return (
-    <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-slate-950">
-      <div className="flex items-center justify-between mb-8">
+    <div className="flex-1 flex flex-col p-4 sm:p-6 md:p-8 overflow-y-auto bg-slate-950">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Products Catalog</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Products Catalog</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">
             Manage your store&apos;s inventory and data queried by AI tools during customer chats
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5"
+            className="flex-1 sm:flex-none px-3.5 sm:px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
           >
             <IconUpload className="w-4 h-4" />
             Import CSV
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20"
+            className="flex-1 sm:flex-none px-3.5 sm:px-4 py-2 bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 text-center"
           >
             + Add Product
           </button>
@@ -146,7 +146,7 @@ export default function ProductsView({ businessId }) {
           placeholder="Filter products by name or category..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-sm px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
+          className="w-full max-w-sm px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
         />
       </div>
 
@@ -164,63 +164,65 @@ export default function ProductsView({ businessId }) {
         </div>
       ) : (
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-950/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Category</th>
-                <th className="px-6 py-4">Price</th>
-                <th className="px-6 py-4">Stock</th>
-                <th className="px-6 py-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-white">
-                    <div>{p.name}</div>
-                    {p.description && (
-                      <div className="text-xs text-slate-500 font-normal line-clamp-1 mt-0.5">
-                        {p.description}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
-                      {p.category || 'General'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-medium text-white">
-                    ₹{p.price.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        p.stock > 5
-                          ? 'text-brand-400 bg-brand-500/10'
-                          : p.stock > 0
-                          ? 'text-amber-400 bg-amber-500/10'
-                          : 'text-rose-400 bg-rose-500/10'
-                      }`}
-                    >
-                      {p.stock} units
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        p.active
-                          ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                          : 'bg-slate-800 text-slate-500'
-                      }`}
-                    >
-                      {p.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-300 min-w-[500px]">
+              <thead className="bg-slate-950/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Category</th>
+                  <th className="px-6 py-4">Price</th>
+                  <th className="px-6 py-4">Stock</th>
+                  <th className="px-6 py-4">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filtered.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="px-6 py-4 font-semibold text-white">
+                      <div>{p.name}</div>
+                      {p.description && (
+                        <div className="text-xs text-slate-500 font-normal line-clamp-1 mt-0.5">
+                          {p.description}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
+                        {p.category || 'General'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-white">
+                      ₹{p.price.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          p.stock > 5
+                            ? 'text-brand-400 bg-brand-500/10'
+                            : p.stock > 0
+                            ? 'text-amber-400 bg-amber-500/10'
+                            : 'text-rose-400 bg-rose-500/10'
+                        }`}
+                      >
+                        {p.stock} units
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          p.active
+                            ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                            : 'bg-slate-800 text-slate-500'
+                        }`}
+                      >
+                        {p.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

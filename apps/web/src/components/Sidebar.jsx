@@ -8,6 +8,7 @@ import {
   IconAnalytics,
   IconSettings,
   IconLogout,
+  IconClose,
 } from './Icons';
 
 export default function Sidebar({
@@ -16,6 +17,8 @@ export default function Sidebar({
   business,
   user,
   onLogout,
+  mobileOpen = false,
+  setMobileOpen = () => {},
 }) {
   const [handoffCount, setHandoffCount] = useState(0);
 
@@ -46,21 +49,35 @@ export default function Sidebar({
     { id: 'settings', label: 'Settings', icon: IconSettings },
   ];
 
-  return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 select-none">
+  const handleSelectTab = (tabId) => {
+    setActiveTab(tabId);
+    setMobileOpen(false);
+  };
+
+  const sidebarContent = (
+    <>
       <div>
         {/* Brand header */}
-        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 shadow-md shadow-brand-500/10">
-            <IconBot className="w-6 h-6" />
-          </div>
-          <div className="overflow-hidden">
-            <h2 className="font-bold text-white text-sm truncate">{business?.name || 'WhatsApp Bot'}</h2>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-              <span className="text-[11px] text-slate-400 font-medium">Online</span>
+        <div className="p-5 sm:p-6 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 shadow-md shadow-brand-500/10 shrink-0">
+              <IconBot className="w-6 h-6" />
+            </div>
+            <div className="overflow-hidden">
+              <h2 className="font-bold text-white text-sm truncate">{business?.name || 'WhatsApp Bot'}</h2>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                <span className="text-[11px] text-slate-400 font-medium">Online</span>
+              </div>
             </div>
           </div>
+          {/* Mobile close button */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+          >
+            <IconClose className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Navigation items */}
@@ -71,7 +88,7 @@ export default function Sidebar({
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleSelectTab(item.id)}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   active
                     ? 'bg-brand-500 text-slate-950 shadow-md shadow-brand-500/15 font-bold'
@@ -115,6 +132,31 @@ export default function Sidebar({
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 flex-col justify-between shrink-0 select-none">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer (Overlay + Drawer) */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileOpen(false)}
+          />
+
+          {/* Drawer Body */}
+          <aside className="relative w-72 max-w-[85vw] bg-slate-900 border-r border-slate-800 flex flex-col justify-between z-10 shadow-2xl">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

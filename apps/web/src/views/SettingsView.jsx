@@ -223,10 +223,10 @@ export default function SettingsView({ businessId }) {
     : (settings?.webhook_url || '');
 
   return (
-    <div className="flex-1 flex flex-col p-8 overflow-y-auto bg-slate-950 space-y-8">
+    <div className="flex-1 flex flex-col p-4 sm:p-6 md:p-8 overflow-y-auto bg-slate-950 space-y-6 sm:space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">System & Business Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">System & Business Settings</h1>
+        <p className="text-slate-400 text-xs sm:text-sm mt-1">
           Configure Meta WhatsApp credentials, AI keys, system prompts, and database connection
         </p>
       </div>
@@ -238,8 +238,9 @@ export default function SettingsView({ businessId }) {
       )}
 
       {/* Webhook Card */}
-      <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl">
+      <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl">
         <h3 className="text-base font-bold text-white mb-2">Meta Webhook Configuration</h3>
+
         <p className="text-xs text-slate-400 mb-4">
           Copy this Callback URL into your Meta App Dashboard under WhatsApp &gt; Configuration &gt; Webhook
         </p>

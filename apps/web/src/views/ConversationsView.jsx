@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IconSend, IconBot, IconUser } from '../components/Icons';
+import { IconSend, IconBot, IconUser, IconBack } from '../components/Icons';
 
 export default function ConversationsView({ businessId }) {
   const [conversations, setConversations] = useState([]);
@@ -24,7 +24,8 @@ export default function ConversationsView({ businessId }) {
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
-        if (!selectedId && data.length > 0) {
+        // Only auto-select first conversation on desktop screens (>= 768px)
+        if (!selectedId && data.length > 0 && window.innerWidth >= 768) {
           setSelectedId(data[0].id);
         }
       }
@@ -32,6 +33,7 @@ export default function ConversationsView({ businessId }) {
       // ignore network errors during poll
     }
   };
+
 
   // Poll active conversation details
   const fetchActiveConversation = async (id) => {
@@ -139,9 +141,13 @@ export default function ConversationsView({ businessId }) {
 
   return (
     <div className="flex-1 flex overflow-hidden bg-slate-950">
-      {/* Sidebar List */}
-      <div className="w-80 md:w-96 border-r border-slate-800 flex flex-col bg-slate-900/50">
-        <div className="p-4 border-b border-slate-800">
+      {/* Sidebar List (Full width on mobile when no chat is open, hidden on mobile when chat is open) */}
+      <div
+        className={`w-full md:w-80 lg:w-96 border-r border-slate-800 flex flex-col bg-slate-900/50 ${
+          selectedId ? 'hidden md:flex' : 'flex'
+        }`}
+      >
+        <div className="p-3 sm:p-4 border-b border-slate-800">
           <input
             type="text"
             placeholder="Search chats by phone or name..."
@@ -149,7 +155,7 @@ export default function ConversationsView({ businessId }) {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
           />
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-2.5">
             {['all', 'bot', 'human'].map((mode) => (
               <button
                 key={mode}
@@ -177,16 +183,16 @@ export default function ConversationsView({ businessId }) {
                 <div
                   key={conv.id}
                   onClick={() => setSelectedId(conv.id)}
-                  className={`p-4 cursor-pointer transition-colors ${
+                  className={`p-3.5 sm:p-4 cursor-pointer transition-colors ${
                     active ? 'bg-slate-800/80 border-l-2 border-brand-500' : 'hover:bg-slate-850/50'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-white text-sm">
+                    <span className="font-semibold text-white text-sm truncate mr-2">
                       {conv.customer_name || conv.customer_phone}
                     </span>
                     <span
-                      className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                      className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full shrink-0 ${
                         isHuman
                           ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
                           : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
@@ -216,71 +222,87 @@ export default function ConversationsView({ businessId }) {
 
       {/* Chat Thread */}
       {activeConv ? (
-        <div className="flex-1 flex flex-col bg-slate-950">
+        <div
+          className={`flex-1 flex flex-col bg-slate-950 overflow-hidden ${
+            selectedId ? 'flex' : 'hidden md:flex'
+          }`}
+        >
           {/* Top Bar */}
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/60 backdrop-blur">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white">
-                  {activeConv.customer_name || activeConv.customer_phone}
-                </h2>
-                <span
-                  className={`text-xs uppercase font-bold px-2.5 py-0.5 rounded-full ${
-                    activeConv.mode === 'human'
-                      ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                      : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                  }`}
-                >
-                  {activeConv.mode} mode
-                </span>
-                {activeConv.needs_human && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    Needs Human
+          <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/60 backdrop-blur shrink-0">
+            <div className="flex items-center gap-2 overflow-hidden mr-2">
+              {/* Mobile Back Button */}
+              <button
+                onClick={() => setSelectedId(null)}
+                className="md:hidden p-1.5 -ml-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 shrink-0"
+                aria-label="Back to chat list"
+              >
+                <IconBack className="w-5 h-5" />
+              </button>
+
+              <div className="overflow-hidden">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold text-white truncate">
+                    {activeConv.customer_name || activeConv.customer_phone}
+                  </h2>
+                  <span
+                    className={`text-[10px] sm:text-xs uppercase font-bold px-2 py-0.5 rounded-full ${
+                      activeConv.mode === 'human'
+                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                        : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                    }`}
+                  >
+                    {activeConv.mode}
                   </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                <span>Phone: {activeConv.customer_phone}</span>
-                <span>•</span>
-                <span
-                  className={
-                    isWithin24Hours(activeConv.last_customer_message_at)
-                      ? 'text-brand-400'
-                      : 'text-rose-400'
-                  }
-                >
-                  {isWithin24Hours(activeConv.last_customer_message_at)
-                    ? '24h Service Window Active'
-                    : '24h Service Window Expired'}
-                </span>
+                  {activeConv.needs_human && (
+                    <span className="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      Needs Human
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
+                  <span className="truncate">{activeConv.customer_phone}</span>
+                  <span>•</span>
+                  <span
+                    className={`truncate ${
+                      isWithin24Hours(activeConv.last_customer_message_at)
+                        ? 'text-brand-400'
+                        : 'text-rose-400'
+                    }`}
+                  >
+                    {isWithin24Hours(activeConv.last_customer_message_at)
+                      ? '24h Active'
+                      : '24h Expired'}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {activeConv.mode === 'bot' ? (
                 <button
                   onClick={handleTakeOver}
                   disabled={actionLoading}
-                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-purple-600/20 flex items-center gap-1.5"
+                  className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-purple-600/20 flex items-center gap-1.5"
                 >
                   <IconUser className="w-4 h-4" />
-                  Take Over Chat
+                  <span className="hidden sm:inline">Take Over</span>
+                  <span className="sm:hidden">Takeover</span>
                 </button>
               ) : (
                 <button
                   onClick={handleReturnToBot}
                   disabled={actionLoading}
-                  className="px-3.5 py-2 bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 flex items-center gap-1.5"
+                  className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 flex items-center gap-1.5"
                 >
                   <IconBot className="w-4 h-4" />
-                  Return to Bot
+                  <span>Return to Bot</span>
                 </button>
               )}
             </div>
           </div>
 
           {/* Messages Stream */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4">
             {activeConv.messages.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-500 text-sm">
                 No messages in this conversation
@@ -295,7 +317,7 @@ export default function ConversationsView({ businessId }) {
                     className={`flex flex-col ${isCustomer ? 'items-start' : 'items-end'}`}
                   >
                     <div
-                      className={`max-w-md lg:max-w-lg px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                      className={`max-w-[85%] sm:max-w-md lg:max-w-lg px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm leading-relaxed ${
                         isCustomer
                           ? 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-sm'
                           : isBot
@@ -318,7 +340,7 @@ export default function ConversationsView({ businessId }) {
                           </>
                         )}
                       </div>
-                      <div className="whitespace-pre-wrap">{m.body}</div>
+                      <div className="whitespace-pre-wrap break-words">{m.body}</div>
                     </div>
                     <span className="text-[10px] text-slate-500 mt-1 px-1">
                       {new Date(m.created_at).toLocaleTimeString([], {
@@ -334,9 +356,9 @@ export default function ConversationsView({ businessId }) {
           </div>
 
           {/* Reply Box */}
-          <div className="p-4 border-t border-slate-800 bg-slate-900/60 backdrop-blur">
+          <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-900/60 backdrop-blur shrink-0">
             {error && (
-              <div className="mb-3 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
+              <div className="mb-2 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
                 {error}
               </div>
             )}
@@ -345,25 +367,25 @@ export default function ConversationsView({ businessId }) {
                 type="text"
                 placeholder={
                   isWithin24Hours(activeConv.last_customer_message_at)
-                    ? 'Type reply as operator (will send via WhatsApp)...'
-                    : '24h service window expired. Template required.'
+                    ? 'Type reply as operator...'
+                    : '24h service window expired.'
                 }
                 disabled={!isWithin24Hours(activeConv.last_customer_message_at) || sending}
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-50"
+                className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-50"
               />
               <button
                 type="submit"
                 disabled={!replyText.trim() || sending || !isWithin24Hours(activeConv.last_customer_message_at)}
-                className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-slate-950 font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 flex items-center gap-1.5"
+                className="px-3.5 sm:px-5 py-2 sm:py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-slate-950 font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 flex items-center gap-1.5 shrink-0"
               >
                 {sending ? (
                   <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
                     <IconSend className="w-4 h-4" />
-                    <span>Send</span>
+                    <span className="hidden sm:inline text-xs sm:text-sm">Send</span>
                   </>
                 )}
               </button>
@@ -371,10 +393,11 @@ export default function ConversationsView({ businessId }) {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+        <div className="hidden md:flex flex-1 items-center justify-center text-slate-500 text-sm">
           Select a conversation from the left to view messages
         </div>
       )}
     </div>
   );
 }
+
