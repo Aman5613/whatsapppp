@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DATABASE_URL: postgresql://test:test@localhost:5432/test
+  DIRECT_DATABASE_URL: postgresql://test:test@localhost:5432/test
+  SECRET_KEY: ci-test-secret-key
+  ENCRYPTION_KEY: Y2ktdGVzdC1lbmNyeXB0aW9uLWtleS0zMg==
+  PUBLIC_BASE_URL: http://localhost
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: pip install -r requirements.txt
+
+      - name: Lint
+        working-directory: apps/api
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        working-directory: apps/api
+        run: pytest -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build

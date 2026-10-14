@@ -1,0 +1,40 @@
+# Caddy production & local configuration
+# When DOMAIN is set in .env (e.g. bot.example.com), Caddy automatically provisions
+# and renews Let's Encrypt / ZeroSSL TLS certificates on port 443.
+{$DOMAIN::80} {
+	# Gzip & Zstandard compression
+	encode zstd gzip
+
+	# Serve built React dashboard
+	root * /srv
+	file_server
+
+	# Standard security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# API router reverse proxy
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Webhook router reverse proxy
+	handle /webhook/* {
+		reverse_proxy api:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# SPA fallback: serve index.html for client-side routing
+	try_files {path} /index.html
+}
