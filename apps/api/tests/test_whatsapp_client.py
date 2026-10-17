@@ -87,3 +87,35 @@ async def test_whatsapp_client_mark_as_read(monkeypatch):
     assert success is True
     assert captured_request["json"]["status"] == "read"
     assert captured_request["json"]["message_id"] == "wamid.inbound999"
+
+
+@pytest.mark.anyio
+async def test_whatsapp_client_get_phone_number_info(monkeypatch):
+    """Verify get_phone_number_info queries correct Graph API endpoint."""
+    captured_request = {}
+
+    async def mock_get(self, url, headers=None):
+        captured_request["url"] = str(url)
+        captured_request["headers"] = headers
+        return httpx.Response(
+            200,
+            json={
+                "verified_name": "Test Store",
+                "display_phone_number": "+1 555-0100",
+                "id": "1234567890",
+                "quality_rating": "GREEN",
+            },
+            request=httpx.Request("GET", str(url)),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
+
+    client = WhatsAppClient()
+    info = await client.get_phone_number_info(
+        phone_number_id="1234567890",
+        access_token="test_token_abc",
+    )
+    assert info["verified_name"] == "Test Store"
+    assert captured_request["url"] == "https://graph.facebook.com/v21.0/1234567890"
+    assert captured_request["headers"]["Authorization"] == "Bearer test_token_abc"
+

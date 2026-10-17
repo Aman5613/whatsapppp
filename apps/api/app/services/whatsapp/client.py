@@ -80,3 +80,25 @@ class WhatsAppClient:
         except Exception as exc:
             logger.warning("Failed to mark message as read: %s", exc)
             return False
+
+    async def get_phone_number_info(
+        self,
+        phone_number_id: str,
+        access_token: str,
+    ) -> dict[str, Any]:
+        """Fetch phone number metadata from Meta Graph API to verify credentials."""
+        url = f"{self.base_url}/{phone_number_id}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(url, headers=headers)
+            if not response.is_success:
+                logger.error(
+                    "WhatsApp get_phone_number_info failed: status=%s body=%s",
+                    response.status_code,
+                    response.text,
+                )
+                response.raise_for_status()
+            return response.json()
+
