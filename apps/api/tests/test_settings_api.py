@@ -83,3 +83,44 @@ async def test_database_status_api(client: httpx.AsyncClient):
     data = resp.json()
     assert "connected" in data
     assert "is_sqlite" in data
+
+
+@pytest.mark.anyio
+async def test_test_ai_endpoint(client: httpx.AsyncClient, monkeypatch):
+    """Verify POST /api/settings/test-ai calls provider.generate successfully."""
+    from unittest.mock import AsyncMock
+
+    from app.services.ai.types import LLMResult, StopReason, Usage
+
+    mock_provider = AsyncMock()
+    mock_provider.generate = AsyncMock(
+        return_value=LLMResult(
+            text="OK",
+            tool_calls=[],
+            usage=Usage(input_tokens=5, output_tokens=2),
+            provider="gemini",
+            model="gemini-1.5-flash",
+            stop_reason=StopReason.END_TURN,
+        )
+    )
+
+    import app.routers.settings
+
+    monkeypatch.setattr(app.routers.settings, "get_provider", lambda **kwargs: mock_provider)
+
+    import uuid
+
+    resp = await client.post(
+        f"/api/settings/test-ai?business_id={uuid.uuid4()}",
+        json={
+            "provider": "gemini",
+            "model": "gemini-1.5-flash",
+            "api_key": "AIzaSyFakeKey12345",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert "Received: OK" in data["message"]
+
+

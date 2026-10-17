@@ -76,6 +76,7 @@ class TestAIRequest(BaseModel):
     provider: str = Field(..., description="openai, anthropic, or gemini")
     model: str
     api_key: str | None = None  # If None, uses saved business key
+    auto_save: bool = True
 
 
 class TestAIResponse(BaseModel):
@@ -87,6 +88,10 @@ class TestAIResponse(BaseModel):
 class TestWhatsAppRequest(BaseModel):
     phone_number_id: str
     access_token: str | None = None  # If None, uses saved business token
+    waba_id: str | None = None
+    app_secret: str | None = None
+    verify_token: str | None = None
+    auto_save: bool = True
 
 
 class TestWhatsAppResponse(BaseModel):
@@ -97,6 +102,9 @@ class TestWhatsAppResponse(BaseModel):
 
 class DatabaseTestRequest(BaseModel):
     database_url: str = Field(..., min_length=10)
+    direct_database_url: str | None = None
+    auto_apply: bool = False
+
 
 
 class DatabaseApplyRequest(BaseModel):
@@ -247,14 +255,26 @@ async def test_ai_connection(
             model=payload.model,
         )
         start_time = time.perf_counter()
-        res = await provider.generate_reply(
+        res = await provider.generate(
+            system="You are a ping test.",
             messages=[Msg(role="user", content="Ping. Reply with 'OK'.")],
-            system_prompt="You are a ping test.",
         )
         latency = (time.perf_counter() - start_time) * 1000
+        reply_text = (res.text or "").strip()
+
+        # Auto-save verified AI credentials
+        if payload.auto_save:
+            biz = await session.get(Business, business_id)
+            if biz:
+                biz.ai_provider = payload.provider
+                biz.ai_model = payload.model
+                if payload.api_key and payload.api_key.strip():
+                    biz.ai_api_key_enc = encrypt_value(payload.api_key.strip())
+                await session.commit()
+
         return TestAIResponse(
             success=True,
-            message=f"Received: {res.content.strip()}",
+            message=f"Connected and saved! Received: {reply_text}",
             latency_ms=round(latency, 2),
         )
     except Exception as exc:
@@ -271,7 +291,7 @@ async def test_whatsapp_connection(
     business_id: uuid.UUID = Query(..., description="Business ID (tenant)"),
     session: AsyncSession = Depends(get_session),
 ) -> TestWhatsAppResponse:
-    """Test WhatsApp Meta Graph API credentials."""
+    """Test WhatsApp Meta Graph API credentials and auto-save on success."""
     token_to_use = payload.access_token
     if not token_to_use:
         num_query = select(WhatsAppNumber).where(WhatsAppNumber.business_id == business_id)
@@ -287,9 +307,41 @@ async def test_whatsapp_connection(
             phone_number_id=payload.phone_number_id,
             access_token=token_to_use,
         )
+
+        # Auto-save verified WhatsApp credentials to database
+        if payload.auto_save:
+            num_query = select(WhatsAppNumber).where(WhatsAppNumber.business_id == business_id)
+            result = await session.execute(num_query)
+            number = result.scalar_one_or_none()
+            if not number:
+                number = WhatsAppNumber(
+                    business_id=business_id,
+                    phone_number_id=payload.phone_number_id.strip(),
+                    access_token_enc=encrypt_value(token_to_use.strip()),
+                    verify_token=payload.verify_token or "meta_verify_token",
+                    app_secret_enc=encrypt_value(payload.app_secret.strip()) if payload.app_secret else "",
+                    waba_id=payload.waba_id,
+                )
+                session.add(number)
+            else:
+                number.phone_number_id = payload.phone_number_id.strip()
+                number.access_token_enc = encrypt_value(token_to_use.strip())
+                if payload.waba_id:
+                    number.waba_id = payload.waba_id
+                if payload.verify_token:
+                    number.verify_token = payload.verify_token
+                if payload.app_secret and payload.app_secret.strip():
+                    number.app_secret_enc = encrypt_value(payload.app_secret.strip())
+            await session.commit()
+
+        verified_name = (
+            data.get("verified_name")
+            or data.get("display_phone_number")
+            or payload.phone_number_id
+        )
         return TestWhatsAppResponse(
             success=True,
-            message="WhatsApp Graph API connection successful.",
+            message=f"WhatsApp connection verified and saved for '{verified_name}'!",
             phone_data=data,
         )
     except Exception as exc:
@@ -313,9 +365,23 @@ async def database_status() -> dict[str, Any]:
 
 @router.post("/database/test")
 async def database_test(payload: DatabaseTestRequest) -> dict[str, Any]:
-    """Test a proposed PostgreSQL / Neon connection string."""
+    """Test a proposed PostgreSQL / Neon connection string and optionally auto-apply."""
     ok, msg = await test_connection(payload.database_url)
-    return {"success": ok, "message": msg}
+    if ok and payload.auto_apply:
+        try:
+            await update_database_connection(
+                new_url=payload.database_url,
+                new_direct_url=payload.direct_database_url,
+            )
+            return {
+                "success": True,
+                "applied": True,
+                "message": "Database connection verified and applied successfully.",
+            }
+        except Exception as exc:
+            return {"success": False, "applied": False, "message": str(exc)}
+    return {"success": ok, "applied": False, "message": msg}
+
 
 
 @router.post("/database/apply")

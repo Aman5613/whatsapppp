@@ -138,10 +138,16 @@ export default function SettingsView({ businessId }) {
           provider: aiProvider,
           model: aiModel,
           api_key: aiKey.trim() || undefined,
+          auto_save: true,
         }),
       });
       const data = await res.json();
       setAiTestResult(data);
+      if (data.success) {
+        setNotice(data.message || 'AI credentials verified and saved successfully! ✅');
+        setAiKey('');
+        await fetchSettings();
+      }
     } finally {
       setTestingAi(false);
     }
@@ -155,12 +161,22 @@ export default function SettingsView({ businessId }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone_number_id: phoneId,
+          phone_number_id: phoneId.trim(),
           access_token: waToken.trim() || undefined,
+          waba_id: wabaId.trim() || undefined,
+          app_secret: waSecret.trim() || undefined,
+          verify_token: waVerifyToken.trim() || undefined,
+          auto_save: true,
         }),
       });
       const data = await res.json();
       setWaTestResult(data);
+      if (data.success) {
+        setNotice(data.message || 'WhatsApp credentials verified and saved successfully! ✅');
+        setWaToken('');
+        setWaSecret('');
+        await fetchSettings();
+      }
     } finally {
       setTestingWa(false);
     }
@@ -174,14 +190,23 @@ export default function SettingsView({ businessId }) {
       const res = await fetch('/api/settings/database/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ database_url: newDbUrl.trim() }),
+        body: JSON.stringify({
+          database_url: newDbUrl.trim(),
+          auto_apply: true,
+        }),
       });
       const data = await res.json();
       setDbTestResult(data);
+      if (data.success && data.applied) {
+        setNotice('Database connection verified and saved successfully! ✅');
+        setNewDbUrl('');
+        await fetchDbStatus();
+      }
     } finally {
       setTestingDb(false);
     }
   };
+
 
   const handleApplyDb = async () => {
     if (!newDbUrl.trim()) return;
