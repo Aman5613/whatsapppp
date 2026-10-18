@@ -1,0 +1,16 @@
+{
+  "name": "whatsapp-bot-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WhatsApp Multi-Tenant AI Bot with React Dashboard",
+  "scripts": {
+    "dev": "concurrently -n \"API,WEB\" -c \"cyan,green\" \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "python -m uvicorn app.main:app --reload --port 8000 --app-dir apps/api",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "test": "cd apps/api && python -m pytest"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

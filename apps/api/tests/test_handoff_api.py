@@ -1,5 +1,6 @@
 """Tests for handoff queue and conversation API endpoints."""
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
@@ -249,3 +250,78 @@ async def test_post_operator_message_outside_24h_returns_400(
     )
     assert resp.status_code == 400
     assert "24-hour" in resp.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_post_operator_message_whatsapp_rejection_returns_400(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch,
+):
+    """Verify that Meta Graph API errors return clean 400 instead of 500."""
+    biz = Business(name="Meta Err Shop", webhook_key="err_key")
+    db_session.add(biz)
+    await db_session.flush()
+
+    cust = Customer(business_id=biz.id, phone="+919000000006")
+    db_session.add(cust)
+    await db_session.flush()
+
+    number = WhatsAppNumber(
+        business_id=biz.id,
+        phone_number_id="num_err",
+        access_token_enc=encrypt_value("expired_tok"),
+        app_secret_enc=encrypt_value("sec"),
+        verify_token="tok",
+    )
+    db_session.add(number)
+    await db_session.flush()
+
+    conv = Conversation(
+        business_id=biz.id,
+        customer_id=cust.id,
+        number_id=number.id,
+        mode=ConversationMode.HUMAN,
+        needs_human=True,
+        last_customer_message_at=datetime.now(UTC),
+    )
+    db_session.add(conv)
+    await db_session.commit()
+
+    # Simulate Meta Graph API HTTP 400 error
+    async def mock_send_text_fail(*args, **kwargs):
+        req = httpx.Request("POST", "https://graph.facebook.com/v21.0/messages")
+        res = httpx.Response(
+            status_code=400,
+            json={"error": {"message": "Error validating access token: Session has expired", "code": 190}},
+            request=req,
+        )
+        raise httpx.HTTPStatusError("Bad Request", request=req, response=res)
+
+    monkeypatch.setattr(WhatsAppClient, "send_text", mock_send_text_fail)
+
+    resp = await client.post(
+        f"/api/conversations/{conv.id}/messages?business_id={biz.id}",
+        json={"body": "Should fail gracefully"},
+    )
+    assert resp.status_code == 400
+    data = resp.json()
+    assert "WhatsApp API error" in data["detail"]
+    assert "Session has expired" in data["detail"]
+
+
+@pytest.mark.anyio
+async def test_event_broadcaster():
+    """Verify in-memory event pub/sub broadcaster dispatches events to subscribers."""
+    from app.core.events import broadcaster
+
+    biz_id = str(uuid.uuid4())
+    queue = broadcaster.subscribe(biz_id)
+    try:
+        await broadcaster.broadcast(biz_id, "new_message", {"conversation_id": "c1", "body": "hello"})
+        item = queue.get_nowait()
+        assert item["type"] == "new_message"
+        assert item["data"]["body"] == "hello"
+    finally:
+        broadcaster.unsubscribe(biz_id, queue)
+

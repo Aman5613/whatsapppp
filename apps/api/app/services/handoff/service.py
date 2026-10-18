@@ -3,6 +3,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,10 @@ class ServiceWindowExpiredError(Exception):
 
 class ConversationNotFoundError(Exception):
     """Raised when conversation cannot be found or is not tenant-owned."""
+
+
+class WhatsAppDeliveryError(Exception):
+    """Raised when sending a message to Meta Graph API fails."""
 
 
 async def transition_to_human(
@@ -114,23 +119,49 @@ async def send_human_reply(
 
     # 2. WhatsApp dispatch
     wa_client = client or WhatsAppClient()
-    access_token = (
-        decrypt_value(conversation.number.access_token_enc)
-        if conversation.number and conversation.number.access_token_enc
-        else None
-    )
+    access_token = None
+    if conversation.number and conversation.number.access_token_enc:
+        try:
+            access_token = decrypt_value(conversation.number.access_token_enc)
+        except Exception as exc:
+            raise WhatsAppDeliveryError(
+                "Failed to decrypt WhatsApp access token. Please re-enter credentials in Settings."
+            ) from exc
+
+    if not access_token or not conversation.number:
+        raise WhatsAppDeliveryError(
+            "WhatsApp credentials are not configured for this number. Please configure them in Settings."
+        )
 
     wa_message_id: str | None = None
-    if access_token and conversation.number and conversation.customer:
-        resp = await wa_client.send_text(
-            phone_number_id=conversation.number.phone_number_id,
-            access_token=access_token,
-            to=conversation.customer.phone,
-            body=body,
-        )
-        messages_resp = resp.get("messages", [])
-        if messages_resp:
-            wa_message_id = messages_resp[0].get("id")
+    if conversation.customer:
+        try:
+            resp = await wa_client.send_text(
+                phone_number_id=conversation.number.phone_number_id,
+                access_token=access_token,
+                to=conversation.customer.phone,
+                body=body,
+            )
+            messages_resp = resp.get("messages", [])
+            if messages_resp:
+                wa_message_id = messages_resp[0].get("id")
+        except httpx.HTTPStatusError as exc:
+            meta_msg = exc.response.text
+            try:
+                error_data = exc.response.json()
+                if isinstance(error_data, dict) and "error" in error_data and "message" in error_data["error"]:
+                    meta_msg = error_data["error"]["message"]
+            except Exception:
+                pass
+            logger.error(
+                "WhatsApp API delivery failure",
+                status_code=exc.response.status_code,
+                error=meta_msg,
+            )
+            raise WhatsAppDeliveryError(f"WhatsApp API error: {meta_msg}") from exc
+        except Exception as exc:
+            logger.error("WhatsApp delivery exception", error=str(exc))
+            raise WhatsAppDeliveryError(f"Delivery failed: {exc}") from exc
 
     # 3. Persist outbound human message
     msg_repo = MessageRepository(session)

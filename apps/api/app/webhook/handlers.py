@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.core.crypto import decrypt_value
 from app.core.database import async_session_factory
+from app.core.events import broadcaster
 from app.models.business import Business
 from app.models.conversation import ConversationMode
 from app.models.message import MessageRole
@@ -116,7 +117,7 @@ async def process_webhook_event(
                         )
 
                         # 4. Store Inbound Message
-                        await msg_repo.create(
+                        inbound_msg_record = await msg_repo.create(
                             conversation_id=conversation.id,
                             role=MessageRole.CUSTOMER,
                             body=body,
@@ -128,6 +129,18 @@ async def process_webhook_event(
                         # Update last_customer_message_at
                         conversation.last_customer_message_at = datetime.now(UTC)
                         await session.flush()
+
+                        # Real-time event for incoming customer message
+                        await broadcaster.broadcast(
+                            str(business.id),
+                            "new_message",
+                            {
+                                "conversation_id": str(conversation.id),
+                                "message_id": str(inbound_msg_record.id),
+                                "role": "customer",
+                                "body": body,
+                            },
+                        )
 
                         # 5. Mark as read on WhatsApp
                         if access_token:
@@ -154,6 +167,17 @@ async def process_webhook_event(
                             conversation.mode = ConversationMode.HUMAN
                             conversation.needs_human = True
                             await session.flush()
+
+                            await broadcaster.broadcast(
+                                str(business.id),
+                                "conversation_updated",
+                                {
+                                    "conversation_id": str(conversation.id),
+                                    "mode": "human",
+                                    "needs_human": True,
+                                },
+                            )
+
                             if access_token:
                                 handoff_notice = "I have transferred your chat to our support team. A human representative will assist you shortly."
                                 resp = await client.send_text(
@@ -167,13 +191,23 @@ async def process_webhook_event(
                                     if resp.get("messages")
                                     else None
                                 )
-                                await msg_repo.create(
+                                notice_msg = await msg_repo.create(
                                     conversation_id=conversation.id,
                                     role=MessageRole.BOT,
                                     body=handoff_notice,
                                     wa_message_id=msg_id,
                                     type_="text",
                                     status="sent",
+                                )
+                                await broadcaster.broadcast(
+                                    str(business.id),
+                                    "new_message",
+                                    {
+                                        "conversation_id": str(conversation.id),
+                                        "message_id": str(notice_msg.id),
+                                        "role": "bot",
+                                        "body": handoff_notice,
+                                    },
                                 )
                             continue
 
@@ -214,13 +248,23 @@ async def process_webhook_event(
                             except Exception as exc:
                                 logger.error("Failed to send WhatsApp echo reply: %s", exc)
 
-                            await msg_repo.create(
+                            echo_stored = await msg_repo.create(
                                 conversation_id=conversation.id,
                                 role=MessageRole.BOT,
                                 body=echo_reply,
                                 wa_message_id=outbound_wa_id,
                                 type_="text",
                                 status="sent" if outbound_wa_id else "failed",
+                            )
+                            await broadcaster.broadcast(
+                                str(business.id),
+                                "new_message",
+                                {
+                                    "conversation_id": str(conversation.id),
+                                    "message_id": str(echo_stored.id),
+                                    "role": "bot",
+                                    "body": echo_reply,
+                                },
                             )
 
                     # --- Process Status Callbacks ---

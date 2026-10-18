@@ -126,3 +126,34 @@ export const IconBack = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
+export const IconChevronLeft = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <polyline points="15 18 9 12 15 6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+export const IconChevronRight = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <polyline points="9 18 15 12 9 6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+export const IconSidebar = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" />
+    <line x1="9" y1="3" x2="9" y2="21" strokeWidth="2" />
+  </svg>
+);
+
+export const IconGripVertical = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+    <circle cx="7" cy="5" r="1.5" />
+    <circle cx="13" cy="5" r="1.5" />
+    <circle cx="7" cy="10" r="1.5" />
+    <circle cx="13" cy="10" r="1.5" />
+    <circle cx="7" cy="15" r="1.5" />
+    <circle cx="13" cy="15" r="1.5" />
+  </svg>
+);
+
+

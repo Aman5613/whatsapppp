@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
     # --- Application Routers ---
     from app.routers.auth import router as auth_router
     from app.routers.conversations import router as conversations_router
+    from app.routers.events import router as events_router
     from app.routers.handoff import router as handoff_router
     from app.routers.orders import router as orders_router
     from app.routers.products import router as products_router
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(orders_router)
     app.include_router(handoff_router)
     app.include_router(conversations_router)
+    app.include_router(events_router)
     app.include_router(settings_router)
     app.include_router(usage_router)
 

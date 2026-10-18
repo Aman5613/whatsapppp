@@ -21,6 +21,7 @@ from app.services.ai.types import Msg
 from app.services.memory.loader import load_conversation_history
 from app.services.pipeline.rate_limit import customer_rate_limiter
 from app.services.pipeline.system_prompt import build_system_prompt
+from app.core.events import broadcaster
 from app.services.whatsapp.client import WhatsAppClient
 from app.services.whatsapp.window import is_within_service_window
 from app.tools.registry import tool_registry
@@ -187,7 +188,7 @@ async def process_conversation_turn(
             logger.error("Failed to send WhatsApp message via Graph API: %s", exc)
 
         # 9. Store outbound message
-        await msg_repo.create(
+        bot_msg = await msg_repo.create(
             conversation_id=conversation.id,
             role=MessageRole.BOT,
             body=reply_text,
@@ -200,3 +201,14 @@ async def process_conversation_turn(
             session.add(usage_record)
 
         await session.commit()
+
+        await broadcaster.broadcast(
+            str(business.id),
+            "new_message",
+            {
+                "conversation_id": str(conversation.id),
+                "message_id": str(bot_msg.id),
+                "role": "bot",
+                "body": reply_text,
+            },
+        )

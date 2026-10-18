@@ -21,8 +21,17 @@ export default function HandoffView({ businessId, onSelectConversation }) {
 
   useEffect(() => {
     fetchQueue();
-    const interval = setInterval(fetchQueue, 4000);
-    return () => clearInterval(interval);
+
+    const onRealtimeEvent = () => fetchQueue();
+    window.addEventListener('app-realtime-event', onRealtimeEvent);
+    window.addEventListener('focus', onRealtimeEvent);
+
+    const interval = setInterval(fetchQueue, 60000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('app-realtime-event', onRealtimeEvent);
+      window.removeEventListener('focus', onRealtimeEvent);
+    };
   }, [businessId]);
 
   const handleTriggerAutoReturn = async () => {

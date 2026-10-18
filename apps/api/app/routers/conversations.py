@@ -9,12 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.events import broadcaster
 from app.models.conversation import ConversationMode
 from app.repositories.business import BusinessRepository
 from app.repositories.conversation import ConversationRepository
 from app.services.handoff.service import (
     ConversationNotFoundError,
     ServiceWindowExpiredError,
+    WhatsAppDeliveryError,
     send_human_reply,
     transition_to_bot,
     transition_to_human,
@@ -193,6 +195,12 @@ async def take_over_conversation(
     await transition_to_human(session, conv, needs_human=False)
     await session.commit()
 
+    await broadcaster.broadcast(
+        str(business_id),
+        "conversation_updated",
+        {"conversation_id": str(conv.id), "mode": "human", "needs_human": False},
+    )
+
     return TransitionResponse(
         id=conv.id,
         mode=conv.mode.value if hasattr(conv.mode, "value") else str(conv.mode),
@@ -215,6 +223,12 @@ async def return_conversation_to_bot(
 
     await transition_to_bot(session, conv)
     await session.commit()
+
+    await broadcaster.broadcast(
+        str(business_id),
+        "conversation_updated",
+        {"conversation_id": str(conv.id), "mode": "bot", "needs_human": False},
+    )
 
     return TransitionResponse(
         id=conv.id,
@@ -244,6 +258,20 @@ async def post_operator_message(
         raise HTTPException(status_code=404, detail="Conversation not found") from None
     except ServiceWindowExpiredError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
+    except WhatsAppDeliveryError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+    # Broadcast new outbound message in real-time
+    await broadcaster.broadcast(
+        str(business_id),
+        "new_message",
+        {
+            "conversation_id": str(conversation_id),
+            "message_id": str(msg.id),
+            "role": "human",
+            "body": msg.body,
+        },
+    )
 
     return {
         "id": msg.id,

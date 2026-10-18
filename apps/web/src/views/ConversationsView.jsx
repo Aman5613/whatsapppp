@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { IconSend, IconBot, IconUser, IconBack } from '../components/Icons';
+import {
+  IconSend,
+  IconBot,
+  IconUser,
+  IconBack,
+  IconSidebar,
+  IconChevronLeft,
+  IconChevronRight,
+  IconGripVertical,
+} from '../components/Icons';
+import { useRealtimeEvents } from '../hooks/useRealtimeEvents';
 
-export default function ConversationsView({ businessId }) {
+export default function ConversationsView({
+  businessId,
+  sidebarCollapsed = false,
+  onToggleSidebar = () => {},
+}) {
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [activeConv, setActiveConv] = useState(null);
@@ -12,8 +26,42 @@ export default function ConversationsView({ businessId }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
 
-  // Poll conversation list
+  // Draggable slider width & panel collapse state
+  const [chatListWidth, setChatListWidth] = useState(() => {
+    const saved = localStorage.getItem('chat_list_width');
+    return saved ? Math.max(220, Math.min(650, parseInt(saved, 10))) : 340;
+  });
+  const [isListCollapsed, setIsListCollapsed] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Drag resizer handler for the chat list slider
+  const handleSliderMouseDown = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    const startX = e.clientX;
+    const startWidth = chatListWidth;
+
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(220, Math.min(650, startWidth + delta));
+      setChatListWidth(newWidth);
+      localStorage.setItem('chat_list_width', String(newWidth));
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Fetch conversation list
   const fetchConversations = async () => {
     try {
       let url = `/api/conversations?business_id=${businessId}&limit=50`;
@@ -24,18 +72,16 @@ export default function ConversationsView({ businessId }) {
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
-        // Only auto-select first conversation on desktop screens (>= 768px)
-        if (!selectedId && data.length > 0 && window.innerWidth >= 768) {
+        if (!selectedIdRef.current && data.length > 0 && window.innerWidth >= 768) {
           setSelectedId(data[0].id);
         }
       }
     } catch {
-      // ignore network errors during poll
+      // ignore network errors
     }
   };
 
-
-  // Poll active conversation details
+  // Fetch active conversation details
   const fetchActiveConversation = async (id) => {
     if (!id) return;
     try {
@@ -49,17 +95,32 @@ export default function ConversationsView({ businessId }) {
     }
   };
 
+  // Real-time SSE listener
+  const handleRealtimeEvent = (type, data) => {
+    fetchConversations();
+    const currId = selectedIdRef.current;
+    if (currId && data?.conversation_id === currId) {
+      fetchActiveConversation(currId);
+    }
+  };
+
+  const { connected } = useRealtimeEvents(businessId, handleRealtimeEvent);
+
+  // Initial load + fallback poll every 60s + window focus
   useEffect(() => {
     fetchConversations();
-    const interval = setInterval(fetchConversations, 4000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchConversations, 60000);
+    const onFocus = () => fetchConversations();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [businessId, filterMode]);
 
   useEffect(() => {
     if (selectedId) {
       fetchActiveConversation(selectedId);
-      const interval = setInterval(() => fetchActiveConversation(selectedId), 3000);
-      return () => clearInterval(interval);
     }
   }, [selectedId, businessId]);
 
@@ -79,15 +140,23 @@ export default function ConversationsView({ businessId }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: replyText.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail || 'Failed to send message');
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Fallback if response is non-JSON
       }
+
+      if (!res.ok) {
+        throw new Error((data && data.detail) || res.statusText || 'Failed to send message');
+      }
+
       setReplyText('');
       await fetchActiveConversation(selectedId);
       await fetchConversations();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to send message');
     } finally {
       setSending(false);
     }
@@ -141,84 +210,141 @@ export default function ConversationsView({ businessId }) {
 
   return (
     <div className="flex-1 flex overflow-hidden bg-slate-950">
-      {/* Sidebar List (Full width on mobile when no chat is open, hidden on mobile when chat is open) */}
+      {/* Sidebar List (Resizable on desktop, collapsible, full width on mobile when no chat is open) */}
       <div
-        className={`w-full md:w-80 lg:w-96 border-r border-slate-800 flex flex-col bg-slate-900/50 ${
-          selectedId ? 'hidden md:flex' : 'flex'
-        }`}
+        style={{
+          width: isListCollapsed ? '0px' : `${chatListWidth}px`,
+        }}
+        className={`border-r border-slate-800 flex flex-col bg-slate-900/50 shrink-0 transition-[width] duration-75 overflow-hidden ${
+          isListCollapsed ? 'hidden md:flex' : ''
+        } ${selectedId ? 'hidden md:flex' : 'w-full flex'}`}
       >
-        <div className="p-3 sm:p-4 border-b border-slate-800">
-          <input
-            type="text"
-            placeholder="Search chats by phone or name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
-          />
-          <div className="flex gap-2 mt-2.5">
-            {['all', 'bot', 'human'].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setFilterMode(mode)}
-                className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium capitalize transition-colors ${
-                  filterMode === mode
-                    ? 'bg-brand-500 text-slate-950 font-semibold'
-                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
+        <div style={{ width: `${chatListWidth}px` }} className="flex flex-col h-full overflow-hidden">
+          <div className="p-3 sm:p-4 border-b border-slate-800">
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div className="flex items-center gap-1.5">
+                {/* Toggle Main App Sidebar Button */}
+                <button
+                  onClick={onToggleSidebar}
+                  title={sidebarCollapsed ? "Show Main Sidebar" : "Hide Main Sidebar"}
+                  className="hidden md:flex p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                  aria-label="Toggle Main Sidebar"
+                >
+                  <IconSidebar className="w-4 h-4 text-brand-400" />
+                </button>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Chats</span>
+              </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-800/40">
-          {filteredConversations.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-sm">No conversations found</div>
-          ) : (
-            filteredConversations.map((conv) => {
-              const active = conv.id === selectedId;
-              const isHuman = conv.mode === 'human';
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => setSelectedId(conv.id)}
-                  className={`p-3.5 sm:p-4 cursor-pointer transition-colors ${
-                    active ? 'bg-slate-800/80 border-l-2 border-brand-500' : 'hover:bg-slate-850/50'
+              <div className="flex items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                  connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  {connected ? 'Live' : 'Connecting...'}
+                </span>
+
+                {/* Collapse Chat List Button */}
+                <button
+                  onClick={() => setIsListCollapsed(true)}
+                  title="Hide Chat List"
+                  className="hidden md:flex p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                  aria-label="Hide Chat List"
+                >
+                  <IconChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <input
+              type="text"
+              placeholder="Search chats by phone or name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
+            />
+            <div className="flex gap-2 mt-2.5">
+              {['all', 'bot', 'human'].map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setFilterMode(mode)}
+                  className={`flex-1 py-1 px-2.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+                    filterMode === mode
+                      ? 'bg-brand-500 text-slate-950 font-semibold'
+                      : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-white text-sm truncate mr-2">
-                      {conv.customer_name || conv.customer_phone}
-                    </span>
-                    <span
-                      className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                        isHuman
-                          ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                          : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                      }`}
-                    >
-                      {conv.mode}
-                    </span>
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/40">
+            {filteredConversations.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-sm">No conversations found</div>
+            ) : (
+              filteredConversations.map((conv) => {
+                const active = conv.id === selectedId;
+                const isHuman = conv.mode === 'human';
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => setSelectedId(conv.id)}
+                    className={`p-3.5 sm:p-4 cursor-pointer transition-colors ${
+                      active ? 'bg-slate-800/80 border-l-2 border-brand-500' : 'hover:bg-slate-850/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-white text-sm truncate mr-2">
+                        {conv.customer_name || conv.customer_phone}
+                      </span>
+                      <span
+                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          isHuman
+                            ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                            : 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                        }`}
+                      >
+                        {conv.mode}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400 truncate">
+                      {conv.last_message_body || 'No messages yet'}
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+                      <span>{conv.customer_phone}</span>
+                      <span>
+                        {new Date(conv.last_customer_message_at).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-400 truncate">
-                    {conv.last_message_body || 'No messages yet'}
-                  </div>
-                  <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
-                    <span>{conv.customer_phone}</span>
-                    <span>
-                      {new Date(conv.last_customer_message_at).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Draggable Resizer Slider Divider (Desktop) */}
+      {!isListCollapsed && (
+        <div
+          onMouseDown={handleSliderMouseDown}
+          onDoubleClick={() => {
+            setChatListWidth(340);
+            localStorage.setItem('chat_list_width', '340');
+          }}
+          title="Drag to resize chat list (Double-click to reset)"
+          className={`hidden md:flex flex-col justify-center items-center w-1.5 hover:w-2 bg-slate-800/80 hover:bg-brand-500 cursor-col-resize select-none transition-all group relative z-10 shrink-0 ${
+            isDragging ? 'bg-brand-500 w-2 ring-2 ring-brand-500/50' : ''
+          }`}
+        >
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 border border-slate-700 rounded py-2 px-0.5 shadow-xl">
+            <IconGripVertical className="w-3 h-3 text-brand-400" />
+          </div>
+        </div>
+      )}
 
       {/* Chat Thread */}
       {activeConv ? (
@@ -238,6 +364,29 @@ export default function ConversationsView({ businessId }) {
               >
                 <IconBack className="w-5 h-5" />
               </button>
+
+              {/* Desktop Expand Chat List Button (if collapsed) */}
+              {isListCollapsed && (
+                <button
+                  onClick={() => setIsListCollapsed(false)}
+                  title="Show Chat List"
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 shrink-0 transition-colors mr-1"
+                >
+                  <IconChevronRight className="w-4 h-4 text-brand-400" />
+                  <span>Chats</span>
+                </button>
+              )}
+
+              {/* Desktop Toggle Main Sidebar button if sidebar is collapsed */}
+              {sidebarCollapsed && (
+                <button
+                  onClick={onToggleSidebar}
+                  title="Show Main Sidebar"
+                  className="hidden md:flex items-center gap-1.5 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 shrink-0 transition-colors mr-1"
+                >
+                  <IconSidebar className="w-4 h-4 text-brand-400" />
+                </button>
+              )}
 
               <div className="overflow-hidden">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -393,8 +542,17 @@ export default function ConversationsView({ businessId }) {
           </div>
         </div>
       ) : (
-        <div className="hidden md:flex flex-1 items-center justify-center text-slate-500 text-sm">
-          Select a conversation from the left to view messages
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center text-slate-500 text-sm gap-3 p-6 text-center">
+          {isListCollapsed && (
+            <button
+              onClick={() => setIsListCollapsed(false)}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition-colors shadow-lg"
+            >
+              <IconChevronRight className="w-4 h-4 text-brand-400" />
+              <span>Show Chats</span>
+            </button>
+          )}
+          <span>Select a conversation from the left to view messages</span>
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ import {
   IconProduct,
   IconOrder,
   IconSettings,
+  IconSidebar,
 } from './components/Icons';
 
 export default function App() {
@@ -24,6 +25,17 @@ export default function App() {
   const [showSetup, setShowSetup] = useState(false);
   const [activeTab, setActiveTab] = useState('conversations');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('sidebar_collapsed', String(next));
+      return next;
+    });
+  };
 
   // Check auth and initial setup status
   const checkAuth = async () => {
@@ -107,7 +119,7 @@ export default function App() {
   // Logged in: Main Dashboard
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
-      {/* Responsive Sidebar (Desktop fixed + Mobile slide drawer) */}
+      {/* Responsive Sidebar (Desktop fixed/collapsible + Mobile slide drawer) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -116,9 +128,23 @@ export default function App() {
         onLogout={handleLogout}
         mobileOpen={mobileSidebarOpen}
         setMobileOpen={setMobileSidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Desktop Floating Expand Button when Sidebar is Collapsed */}
+        {sidebarCollapsed && (
+          <button
+            onClick={toggleSidebar}
+            title="Show Sidebar"
+            className="hidden md:flex fixed bottom-5 left-5 z-40 items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 rounded-xl shadow-2xl transition-all text-xs font-semibold backdrop-blur-md group hover:border-brand-500/50"
+          >
+            <IconSidebar className="w-4 h-4 text-brand-400 group-hover:scale-110 transition-transform" />
+            <span>Show Sidebar</span>
+          </button>
+        )}
+
         {/* Mobile Top Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -143,7 +169,11 @@ export default function App() {
         {/* Main Content Area (padded bottom on mobile for bottom nav) */}
         <main className="flex-1 flex overflow-hidden pb-14 md:pb-0">
           {activeTab === 'conversations' && (
-            <ConversationsView businessId={user.business_id} />
+            <ConversationsView
+              businessId={user.business_id}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
+            />
           )}
           {activeTab === 'handoff' && (
             <HandoffView

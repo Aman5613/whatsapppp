@@ -9,6 +9,7 @@ import {
   IconSettings,
   IconLogout,
   IconClose,
+  IconChevronLeft,
 } from './Icons';
 
 export default function Sidebar({
@@ -19,6 +20,8 @@ export default function Sidebar({
   onLogout,
   mobileOpen = false,
   setMobileOpen = () => {},
+  sidebarCollapsed = false,
+  onToggleCollapse = () => {},
 }) {
   const [handoffCount, setHandoffCount] = useState(0);
 
@@ -36,8 +39,19 @@ export default function Sidebar({
       }
     };
     fetchCount();
-    const interval = setInterval(fetchCount, 5000);
-    return () => clearInterval(interval);
+
+    // Update on real-time SSE events
+    const onRealtimeEvent = () => fetchCount();
+    window.addEventListener('app-realtime-event', onRealtimeEvent);
+    window.addEventListener('focus', onRealtimeEvent);
+
+    // 60-second background fallback
+    const interval = setInterval(fetchCount, 60000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('app-realtime-event', onRealtimeEvent);
+      window.removeEventListener('focus', onRealtimeEvent);
+    };
   }, [business?.id]);
 
   const navItems = [
@@ -71,6 +85,15 @@ export default function Sidebar({
               </div>
             </div>
           </div>
+          {/* Desktop hide button */}
+          <button
+            onClick={onToggleCollapse}
+            title="Hide Sidebar"
+            className="hidden md:flex p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            aria-label="Hide Sidebar"
+          >
+            <IconChevronLeft className="w-4 h-4" />
+          </button>
           {/* Mobile close button */}
           <button
             onClick={() => setMobileOpen(false)}
@@ -137,9 +160,15 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 flex-col justify-between shrink-0 select-none">
-        {sidebarContent}
+      {/* Desktop Sidebar (Collapsible) */}
+      <aside
+        className={`hidden md:flex bg-slate-900 border-r border-slate-800 flex-col justify-between shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden ${
+          sidebarCollapsed ? 'w-0 opacity-0 border-none pointer-events-none' : 'w-64 opacity-100'
+        }`}
+      >
+        <div className="w-64 flex flex-col justify-between h-full">
+          {sidebarContent}
+        </div>
       </aside>
 
       {/* Mobile Drawer (Overlay + Drawer) */}

@@ -18,8 +18,13 @@ export default function UsageView({ businessId }) {
 
   useEffect(() => {
     fetchUsage();
-    const interval = setInterval(fetchUsage, 10000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchUsage, 60000);
+    const onFocus = () => fetchUsage();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [businessId]);
 
   return (
